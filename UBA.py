@@ -70,6 +70,20 @@ class AI:
         self.load_model()
         ta.retrain(self.user, self.type, self.model, days=2)
 
+class User:
+    def __init__(self, name):
+        self.name = name
+        users_file = os.environ.get('USER_PROFILE_FILE','')
+        users = pd.read_csv(users_file)
+        user = users[users['name']==name]
+        self.bypass = user['by-pass'][0]
+        self.m_threshold = user['m_threshold'][0]
+        self.m_tolerance = user['m_tolerance'][0]
+        self.r_threshold = user['r_threshold'][0]
+        self.r_tolerance = user['r_tolerance'][0]
+        self.idle_r_threshold = user['idle_r_threshold'][0]
+        self.idle_r_tolerance = user['idle_r_tolerance'][0]
+
 class Control:
     # feature file labeling 수정
     def modify_label(filename, type, label):
@@ -122,3 +136,36 @@ class Control:
         else:
             extract_df.to_csv(feature_file, mode='w', index=False)
         return extract_df
+
+    # 각 패턴 AI 인증 및 라벨링 수정, but bypass 권한 있으면 인증 우회함
+    def authenticate(self, name):
+        cUser = User(name)
+        m_extract_df = self.recv(name, 'mouse')
+        r_extract_df = self.recv(name, 'resource')
+        if(cUser.bypass != 'Y'):
+            r_ai = AI(None, name, 'resource')
+            r_ai.load_model()
+            r_pred = r_ai.predict(r_extract_df)
+            if(m_extract_df.shape == (1,3)):    # mouse idle 상태
+                if r_pred < cUser.idle_r_threshold:
+                    label = 'unknown'
+                    self.modify_label(r_extract_df['filename'],'resource', label)
+                    sendData = self.make_sendData(4, cUser.name, label, None, r_pred, None, r_extract_df['filename'])
+                    res = self.alert_to_CERT(sendData)        # 관리자에게 idle 차단 알림(block : 4)
+                elif r_pred < cUser.idle_r_tolerance:
+                    sendData = self.make_sendData(5, cUser.name, cUser.name, None, r_pred, None, r_extract_df['filename'])
+                    res = self.alert_to_CERT(sendData)    # 관리자에게 idle 벌점 알림(demerit : 5)
+            else:
+                m_ai = AI(None, name, 'mouse')
+                m_ai.load_model()
+                m_pred = m_ai.predict(m_extract_df)
+                if m_pred < cUser.m_threshold or r_pred < cUser.r_threshold :
+                    label = 'unknown'
+                    self.modify_pattern_label(m_extract_df['filename'], 'mouse', label)
+                    self.modify_pattern_label(r_extract_df['filename'], 'resource', label)
+                    sendData = self.make_sendData(2, cUser.name, label, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])
+                    res = self.alert_to_CERT(sendData)        # 관리자에게 차단 알림(block : 2)
+                elif m_pred < cUser.m_tolerance or r_pred < cUser.r_tolerance:
+                    sendData = self.make_sendData(3, cUser.name, cUser.name, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])
+                    res = self.alert_to_CERT(sendData)    # 관리자에게 벌점 알림(demerit : 3)
+                
