@@ -54,3 +54,37 @@ class AI:
     def train(self):
         ta.train(self.user, self.type)
     
+
+class Control:
+    # feature file labeling 수정
+    def modify_label(filename, type, label):
+        if(type == 'mouse'):
+            feature_file = os.environ.get('M_FEATURE_FILE', '')
+        else:
+            feature_file = os.environ.get('R_FEATURE_FILE', '')
+        df = pd.read_csv(feature_file)
+        df.loc[df['filename']==filename, 'label'] = label
+        df.to_csv(feature_file, index=False)
+    
+    # request로 보낼 데이터 만들기
+    def make_sendData(issue, user, label, pred_m, pred_r, file_m, file_r):
+        time = datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S.%f")
+        sendData = {'user':user, 
+        'time':time, 
+        'mouse_prediction': str(round(pred_m,5)),
+        'resource_prediction': str(round(pred_r,5)), 
+        'type':issue, 
+        'label':label, 
+        'mouse_file': file_m, 
+        'resource_file': file_r
+        }
+        return sendData
+
+    # CERT 팀에게 경고 알리는 함수
+    def alert_to_CERT(data):
+        url = os.environ.get('CERT_URL','')
+        data = json.dumps(data)
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        res = requests.post(url, data=data, verify=False , headers=headers)    # verify는 SSL인증서 체크 관련 내용
+        return res
+
