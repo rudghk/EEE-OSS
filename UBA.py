@@ -103,3 +103,22 @@ class Control:
         res = requests.post(url, data=data, verify=False , headers=headers)    # verify는 SSL인증서 체크 관련 내용
         return res
 
+    # save user's pattern data
+    # @@ 동작 확인 필요
+    def recv(user, type):
+        if(type == 'mouse'):
+            url = os.environ.get('M_PATTERN_URL','')
+            extract_df = pd.read_json(url,orient='records')
+            if(extract_df.shape == (1,3)):  # idle인 경우
+                return extract_df
+            feature_file = os.environ.get('M_FEATURE_FILE', '')
+        else:
+            url = os.environ.get('R_PATTERN_URL','')
+            extract_df = pd.read_json(url,orient='records')
+            feature_file = os.environ.get('R_FEATURE_FILE', '')
+        
+        if(os.path.isfile(feature_file)):
+            extract_df.to_csv(feature_file, mode='a', index=False, header=None)
+        else:
+            extract_df.to_csv(feature_file, mode='w', index=False)
+        return extract_df
