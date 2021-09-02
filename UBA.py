@@ -54,6 +54,21 @@ class AI:
     def train(self):
         ta.train(self.user, self.type)
     
+    # 기존 모델 고려하지 않고 새롭게 재학습 진행
+    def retrain_all(self, modify_files, modify_labels):
+        # modify wrong label
+        control = Control()
+        for i in range(len(modify_files)):
+            file = modify_files[i]
+            label = modify_labels[i]
+            control.modify_label(file, self.type, label)
+        # train
+        ta.train(self.user, self.type)
+    
+    # 지금으로부터 과거(days+1)일간 데이터로 기존 모델 활용하여 재학습 진행
+    def retrain_part(self):
+        self.load_model()
+        ta.retrain(self.user, self.type, self.model, days=2)
 
 class Control:
     # feature file labeling 수정

@@ -130,3 +130,53 @@ def train(user, type, unit=15, dropout=0.3, lr=0.0005, batch_size=256, epochs=10
     # model 저장
     model_dir = os.environ.get('MODEL_DIR', '')
     model.save(model_dir+model_name)
+
+# 근래 생긴 데이터만을 가지고 기존 모델 재학습(like fine-tuning)
+# @@ freeze 조정 필요
+def retrain(user, type, base_model, days=2, lr=0.00005, batch_size=256, epochs=1000):
+    scaler_name = user+'_scaler_'
+    model_name = user+'_model_'
+    if(type == 'mouse'):
+        scaler_name += '_m.gz'
+        model_name += '_m.h5'
+        feature_file = os.environ.get('M_FEATURE_FILE', '')
+    else:
+        scaler_name += '_r.gz'
+        model_name += '_r.h5'
+        feature_file = os.environ.get('R_FEATURE_FILE', '')
+    retain_allowed_days = (datetime.datetime.today() + datetime.timedelta(days=-days)).strftime("%Y-%m-%d")  # default: 3일간 데이터 재학습에 사용
+    
+    # data(X), labeling & one-hot encoding(Y)
+    df = pd.read_csv(feature_file)
+    df = df[df['time']>=retain_allowed_days]
+    data = df.drop(['filename', 'label', 'time'],axis=1)
+    labels = label_one_hot_encoding(df) 
+    label = labels[[user]]
+
+    # 데이터 셋 분할 전 전처리
+    data = data.fillna(0)
+    # 데이터 셋 분할
+    train_X, test_X, train_Y, test_Y = train_test_split(data, label, test_size=0.3, stratify=labels)
+    # Load scaler & data 전처리
+    scaler = joblib.load(scaler_name)
+    train_X = scaler.transform(train_X)
+    test_X = scaler.transform(test_X)
+
+    # shape 정의
+    input_size = test_X.shape[-1]
+    # AI
+    inputs = Input(shape=(input_size,))
+    # freeze some layers
+    for layer in base_model.layers[:-3]:   
+        layer.trainable = False
+    Y = base_model.output
+    model = compile_model(inputs, Y, lr)
+    es = tf.keras.callbacks.EarlyStopping(monitor='val_loss',mode='min', patience=100)        # epoch 과적합 방지
+    history = model.fit(train_X, train_Y, batch_size=batch_size, epochs=epochs, validation_data=(test_X, test_Y),callbacks=[es])
+    acc_graph(history)
+    evaluate(model, test_X, test_Y)
+    print(model.evaluate(test_X, test_Y))
+
+    # model 저장
+    model_dir = os.environ.get('MODEL_DIR', '')
+    model.save(model_dir+model_name)
