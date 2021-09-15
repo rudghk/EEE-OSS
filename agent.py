@@ -119,3 +119,92 @@ class resource:
         resource_dir = os.environ.get('COLLECT_DIR', '')
         self.path = resource_dir+filename
         self.time = datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+
+    # 칼럼명 통일, datetime 파싱을 수행
+    def parse(self):
+        df = pd.read_csv(self.path, engine='python')
+        
+         # resource file column명 통일
+        df.columns = [
+            "DateTime",
+            "Memory\% Committed Bytes In Use",
+            "Memory\Available MBytes",
+            "Process(_Total)\% Processor Time",
+            "Process(_Total)\Private Bytes",
+            "Process(_Total)\Working Set",
+            "Processor Information(_Total)\% Processor Time",
+            "Processor Information(_Total)\% Processor Utility"
+            ]
+        # datetime parsing
+        featureVector=[None] * 5
+        for i in range(df.shape[0]):
+            date = df.iloc[i,0] # 날짜 column 가져옴
+            arr = date.split(' ')
+
+            ymd = arr[0].split('/')
+            month = int(ymd[0])
+            day = int(ymd[1])
+            year = int(ymd[2])
+
+            time = arr[1].split(':')
+            hour = int(time[0])
+            minute = int(time[1])
+
+            yoli = datetime.date(year, month, day).weekday()
+
+            features = np.array([month, day, yoli, hour, minute])
+            featureVector = np.column_stack((featureVector,features))
+        df = df.drop(['DateTime'], axis=1)
+        
+        # 빈칸은 mean값으로 채우기
+        df_columns = df.columns
+        for i in range(len(df_columns)):
+            col = df_columns[i]
+            if(df[col].dtypes == 'object'):
+                df[col] = df[col].replace(r'[\s]',np.nan,regex=True)
+            mean = df[col].astype('float64').mean()
+            df[col] = df[col].fillna(mean)
+
+        featureVector = featureVector[:,1:] # 첫번째 행이 None이라
+        date_df = pd.DataFrame(data=featureVector,
+                            index=["Month", "Day", "Yoli", "Hour", "Minute"])
+        date_df = date_df.transpose()
+        df = pd.concat([df, date_df],axis=1)
+
+        os.remove(self.path)
+        return df
+    
+    # action에 대한 통계값 추출 
+    def extract(self):
+        df = self.parse()
+        
+        df = df.astype('float64')
+        df = df.drop(['Month', 'Day', 'Yoli', 'Hour', 'Minute'], axis=1)
+
+        # feature extract dict
+        extract = {}
+        # 파일명 저장
+        extract['filename'] = self.filename
+        # label 저장
+        extract['label'] = self.label
+        # 생성 시간
+        extract['time'] = self.time
+
+        # extract to dataframe
+        extract_df = pd.DataFrame([extract])
+        # M x N 배열 -> 1 x NM 배열로 변환
+        columns = df.columns
+        for i in range(df.shape[0]):
+            new_columns = str(i+1)+'_'+columns
+            row_df = pd.DataFrame([df.iloc[i].values], columns=new_columns)
+            extract_df = pd.concat([extract_df, row_df], axis=1) 
+        return extract_df
+    
+    # extracted pattern 서버로 전송
+    def send(self, url):
+        extract_df = self.extract()
+        json_df = extract_df.to_json(orient = 'records')
+        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+        url = os.environ.get('R_PATTERN_URL', '')
+        res = requests.post(url, data=json_df, verify=False , headers=headers)    # verify는 SSL인증서 체크 관련 내용
+        return res
