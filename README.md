@@ -2,7 +2,7 @@
 - User(Client) : collector를 통한 패턴 수집 -> 패턴 parse -> 패턴 extract -> 패턴 send 
 - Server : 패턴 recv -> 사용자 이름으로 패턴 라벨링하여 저장 -> user by-pass 확인 -> 
     - if by-pass(권한 있음) -> 끝  
-    - if not by-pass -> AI predict -> 허용범위 확인 -> 결과에 따라 패턴의 label 수정 -> alert 처리 -> 끝  
+    - if not by-pass -> AI predict -> 허용범위 확인 -> 결과에 따라 패턴의 label 수정 -> json 형태의 경고 데이터 반환 -> 끝  
 
 
 # train_ai.py
@@ -35,12 +35,13 @@
 - 이동거리, 이동방향을 parsing 한 후 action에 대한 통계값을 extract한 값을 서버로 전송함 (send() 내부에서 parse, extract 수행함)
 
 ## resource
-
+- collector가 file로 수집된 패턴 데이터를 떨구면, filename과 label(사용자 이름)을 전달받음
+- datetime을 parsing한 후 M x N 배열을 1 x NM 배열로 변환한 값을 서버로 전송함 (send() 내부에서 parse, extract 수행함)
+    - 현재 datetime 값을 parse는 하지만 활용하지 않음. 만약 datetime 값을 사용하고 싶으면, remove me 주석 부분을 삭제하면 됨 
 
 # TODO
 - train_ai.py retain() 최적화
 - UBA.py Control recv() 동작 확인 및 수정
-- agent.py resource 
 
 
 

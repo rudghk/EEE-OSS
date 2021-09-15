@@ -174,11 +174,14 @@ class resource:
         os.remove(self.path)
         return df
     
-    # action에 대한 통계값 추출 
+    # 배열 형태 변환
     def extract(self):
         df = self.parse()
         
         df = df.astype('float64')
+
+        # remove me 
+        # if you want to use datetime
         df = df.drop(['Month', 'Day', 'Yoli', 'Hour', 'Minute'], axis=1)
 
         # feature extract dict
