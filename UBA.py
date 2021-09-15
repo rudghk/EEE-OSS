@@ -95,7 +95,7 @@ class Control:
         df.loc[df['filename']==filename, 'label'] = label
         df.to_csv(feature_file, index=False)
     
-    # request로 보낼 데이터 만들기
+    # request로 보낼 json 데이터 만들기
     def make_sendData(issue, user, label, pred_m, pred_r, file_m, file_r):
         time = datetime.datetime.today().strftime("%Y-%m-%d %H:%M:%S.%f")
         sendData = {'user':user, 
@@ -107,15 +107,15 @@ class Control:
         'mouse_file': file_m, 
         'resource_file': file_r
         }
+        sendData = json.dumps(sendData)
         return sendData
 
-    # CERT 팀에게 경고 알리는 함수
-    def alert_to_CERT(data):
-        url = os.environ.get('CERT_URL','')
-        data = json.dumps(data)
-        headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
-        res = requests.post(url, data=data, verify=False , headers=headers)    # verify는 SSL인증서 체크 관련 내용
-        return res
+    # # CERT 팀에게 경고 알리는 함수
+    # def alert_to_CERT(data):
+    #     url = os.environ.get('CERT_URL','')
+    #     headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
+    #     res = requests.post(url, data=data, verify=False , headers=headers)    # verify는 SSL인증서 체크 관련 내용
+    #     return res
 
     # save user's pattern data
     # @@ 동작 확인 필요
@@ -138,6 +138,7 @@ class Control:
         return extract_df
 
     # 각 패턴 AI 인증 및 라벨링 수정, but bypass 권한 있으면 인증 우회함
+    # CERT에게 전송(알림)해야할 json 값 반환 (알림 사항이 없으면 None)
     def authenticate(self, name):
         cUser = User(name)
         m_extract_df = self.recv(name, 'mouse')
@@ -150,11 +151,13 @@ class Control:
                 if r_pred < cUser.idle_r_threshold:
                     label = 'unknown'
                     self.modify_label(r_extract_df['filename'],'resource', label)
-                    sendData = self.make_sendData(4, cUser.name, label, None, r_pred, None, r_extract_df['filename'])
-                    res = self.alert_to_CERT(sendData)        # 관리자에게 idle 차단 알림(block : 4)
+                    sendData = self.make_sendData(4, cUser.name, label, None, r_pred, None, r_extract_df['filename'])                            # 관리자에게 idle 차단 알림(block : 4)
+                    return sendData
+                    # res = self.alert_to_CERT(sendData)        
                 elif r_pred < cUser.idle_r_tolerance:
-                    sendData = self.make_sendData(5, cUser.name, cUser.name, None, r_pred, None, r_extract_df['filename'])
-                    res = self.alert_to_CERT(sendData)    # 관리자에게 idle 벌점 알림(demerit : 5)
+                    sendData = self.make_sendData(5, cUser.name, cUser.name, None, r_pred, None, r_extract_df['filename'])                       # 관리자에게 idle 벌점 알림(demerit : 5)
+                    return sendData
+                    # res = self.alert_to_CERT(sendData)   
             else:
                 m_ai = AI(None, name, 'mouse')
                 m_ai.load_model()
@@ -163,9 +166,12 @@ class Control:
                     label = 'unknown'
                     self.modify_pattern_label(m_extract_df['filename'], 'mouse', label)
                     self.modify_pattern_label(r_extract_df['filename'], 'resource', label)
-                    sendData = self.make_sendData(2, cUser.name, label, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])
-                    res = self.alert_to_CERT(sendData)        # 관리자에게 차단 알림(block : 2)
+                    sendData = self.make_sendData(2, cUser.name, label, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])         # 관리자에게 차단 알림(block : 2)
+                    return sendData
+                    # res = self.alert_to_CERT(sendData)       
                 elif m_pred < cUser.m_tolerance or r_pred < cUser.r_tolerance:
-                    sendData = self.make_sendData(3, cUser.name, cUser.name, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])
-                    res = self.alert_to_CERT(sendData)    # 관리자에게 벌점 알림(demerit : 3)
+                    sendData = self.make_sendData(3, cUser.name, cUser.name, m_pred, r_pred, m_extract_df['filename'], r_extract_df['filename'])    # 관리자에게 벌점 알림(demerit : 3)
+                    return sendData
+                    # res = self.alert_to_CERT(sendData)    
+        return None
                 
