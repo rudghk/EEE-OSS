@@ -38,9 +38,6 @@
 - collector가 file로 수집된 패턴 데이터를 떨구면, filename과 label(사용자 이름)을 전달받음
 - column명을 통일하고 빈칸은 mean값으로 채운 후 M x N 배열을 1 x NM 배열로 변환한 값을 서버로 전송함 (send() 내부에서 parse, extract 수행함)
 
-# TODO
-- train_ai.py retain() 최적화
-- UBA.py Control recv() 동작 확인 및 수정
 
 
 
